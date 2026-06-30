@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: fxuser
+      POSTGRES_PASSWORD: fxpass
+      POSTGRES_DB: fxdb
+    ports:
+      - "5432:5439"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
