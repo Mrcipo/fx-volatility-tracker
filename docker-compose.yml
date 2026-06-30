@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: fxpass
       POSTGRES_DB: fxdb
     ports:
-      - "5432:5439"
+      - "5439:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 

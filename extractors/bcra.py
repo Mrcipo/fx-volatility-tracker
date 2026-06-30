@@ -15,7 +15,12 @@ class BCRAClient(BaseAPIClient):
 
     def fetch_principales_variables(self) -> list:
         data = self.get("/Monetarias")
-        self.save_raw(data, "variables.json")
+        _original = self.source_name
+        self.source_name = "bcra_variables"
+        try:
+            self.save_raw(data, "variables.json")
+        finally:
+            self.source_name = _original
         return data
 
     # id_variable=4 → Tipo de Cambio Minorista ($ por USD)
@@ -29,7 +34,12 @@ class BCRAClient(BaseAPIClient):
             f"/Monetarias/{id_variable}",
             params={"desde": fecha_desde, "hasta": fecha_hasta},
         )
-        self.save_raw(data, "tipo_cambio.json")
+        _original = self.source_name
+        self.source_name = "bcra_tipo_cambio"
+        try:
+            self.save_raw(data, "tipo_cambio.json")
+        finally:
+            self.source_name = _original
         return data
 
 
