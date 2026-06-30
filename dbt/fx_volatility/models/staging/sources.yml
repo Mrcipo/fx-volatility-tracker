@@ -1,0 +1,13 @@
+sources:
+  - name: raw
+    schema: raw
+    description: "Datos crudos inmutables ingestados desde APIs externas"
+    tables:
+      - name: bcra_tipo_cambio
+        description: "Serie histórica tipo de cambio minorista ARS/USD (idVariable=4)"
+      - name: bcra_variables
+        description: "Catálogo completo de variables monetarias BCRA"
+      - name: dolarapi_cotizaciones
+        description: "Snapshot de 7 casas de cambio paralelas Argentina"
+      - name: banxico_series
+        description: "Series SF60653 (FIX MXN/USD) y SF46410 combinadas"
