@@ -4,3 +4,5 @@ __pycache__/
 data/raw/**/*.json
 .venv/
 *.egg-info/
+
+dbt/profiles/.user.yml

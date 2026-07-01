@@ -1,4 +1,5 @@
 services:
+
   postgres:
     image: postgres:15
     environment:
@@ -9,6 +10,85 @@ services:
       - "5439:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fxuser -d fxdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    image: apache/airflow:2.9.2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      _PIP_ADDITIONAL_REQUIREMENTS: "dbt-core==1.8.8 dbt-postgres==1.8.2 requests==2.32.3 pandas==2.2.2 psycopg2-binary==2.9.9 python-dotenv==1.0.1"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./extractors:/opt/airflow/extractors
+      - ./loaders:/opt/airflow/loaders
+      - ./dbt:/opt/airflow/dbt
+      - ./data:/opt/airflow/data
+      - airflow_logs:/opt/airflow/logs
+    command: bash -c "airflow db migrate && airflow users create -u admin -p admin -f Admin -l User -r Admin -e admin@example.com || true"
+    restart: on-failure
+
+  airflow-webserver:
+    image: apache/airflow:2.9.2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      _PIP_ADDITIONAL_REQUIREMENTS: "dbt-core==1.8.8 dbt-postgres==1.8.2 requests==2.32.3 pandas==2.2.2 psycopg2-binary==2.9.9 python-dotenv==1.0.1"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./extractors:/opt/airflow/extractors
+      - ./loaders:/opt/airflow/loaders
+      - ./dbt:/opt/airflow/dbt
+      - ./data:/opt/airflow/data
+      - airflow_logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    command: webserver
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      _PIP_ADDITIONAL_REQUIREMENTS: "dbt-core==1.8.8 dbt-postgres==1.8.2 requests==2.32.3 pandas==2.2.2 psycopg2-binary==2.9.9 python-dotenv==1.0.1"
+      DBT_PROFILES_DIR: /opt/airflow/dbt/profiles
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./extractors:/opt/airflow/extractors
+      - ./loaders:/opt/airflow/loaders
+      - ./dbt:/opt/airflow/dbt
+      - ./data:/opt/airflow/data
+      - airflow_logs:/opt/airflow/logs
+    command: scheduler
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  airflow_logs:
