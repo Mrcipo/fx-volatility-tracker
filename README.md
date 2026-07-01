@@ -324,6 +324,23 @@ extract_banxico─→ load_banxico ─────────┘
 
 ---
 
+## Dashboard
+
+El pipeline expone los datos finales a través de un dashboard en **Metabase** 
+(`http://localhost:3000`) con cuatro visualizaciones:
+
+- **ARS/USD Oficial vs Blue** — evolución histórica del tipo de cambio oficial 
+  y paralelo (blue) de Argentina en la misma línea de tiempo
+- **Spread ARG % Blue vs Oficial** — spread porcentual diario calculado por dbt
+- **MXN/USD Tipo de Cambio FIX Banxico** — serie histórica del tipo de cambio 
+  oficial mexicano (serie SF60653)
+- **Tabla resumen con flags de calidad** — vista diaria con indicadores 
+  ✓ Dato real / ⚠ Forward fill por cada fuente
+
+![FX Volatility Tracker Dashboard](docs/dashboard.png)
+
+---
+
 ## Decisiones de Diseño
 
 **¿Por qué JSONB crudo en raw layer?**
