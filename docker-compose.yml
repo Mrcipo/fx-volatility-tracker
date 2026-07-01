@@ -89,6 +89,21 @@ services:
     command: scheduler
     restart: unless-stopped
 
+  metabase:
+    image: metabase/metabase:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MB_DB_TYPE: h2
+      JAVA_TIMEZONE: America/Argentina/Buenos_Aires
+    volumes:
+      - metabase_data:/metabase-data
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
 volumes:
   pgdata:
   airflow_logs:
+  metabase_data:
