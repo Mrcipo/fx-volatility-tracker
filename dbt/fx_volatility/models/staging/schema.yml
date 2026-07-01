@@ -1,0 +1,82 @@
+version: 2
+
+models:
+  - name: stg_bcra_tipo_cambio
+    description: "Tipo de cambio oficial minorista ARS/USD desempaquetado del raw JSONB"
+    columns:
+      - name: raw_id
+        tests:
+          - not_null:
+              severity: error
+      - name: fecha_local
+        tests:
+          - not_null:
+              severity: error
+      - name: fecha_utc
+        tests:
+          - not_null:
+              severity: error
+      - name: valor
+        tests:
+          - not_null:
+              severity: error
+      - name: fuente
+        tests:
+          - not_null:
+              severity: error
+          - accepted_values:
+              values: ['bcra_oficial_minorista']
+              severity: error
+
+  - name: stg_dolarapi_cotizaciones
+    description: "Cotizaciones de 7 casas de cambio desempaquetadas del raw JSONB"
+    columns:
+      - name: raw_id
+        tests:
+          - not_null:
+              severity: error
+      - name: casa
+        tests:
+          - not_null:
+              severity: error
+          - accepted_values:
+              severity: error
+              values:
+                - oficial
+                - blue
+                - bolsa
+                - contadoconliqui
+                - mayorista
+                - cripto
+                - tarjeta
+      - name: fecha_utc
+        tests:
+          - not_null:
+              severity: error
+      - name: venta
+        tests:
+          - not_null:
+              severity: error
+
+  - name: stg_banxico_series
+    description: "Series SF60653 y SF46410 de Banxico desempaquetadas del raw JSONB"
+    columns:
+      - name: raw_id
+        tests:
+          - not_null:
+              severity: error
+      - name: id_serie
+        tests:
+          - not_null:
+              severity: error
+          - accepted_values:
+              values: ['SF60653', 'SF46410']
+              severity: error
+      - name: fecha_local
+        tests:
+          - not_null:
+              severity: error
+      - name: valor
+        tests:
+          - not_null:
+              severity: error

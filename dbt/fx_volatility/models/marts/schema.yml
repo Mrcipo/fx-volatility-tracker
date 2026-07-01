@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: fx_daily_rates
+    description: "Tipos de cambio diarios unificados con forward fill de máximo 3 días"
+    columns:
+      - name: fecha
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+
+  - name: fx_spreads
+    description: "Spreads diarios calculados entre cotizaciones paralelas y oficiales"
+    columns:
+      - name: fecha
+        tests:
+          - unique:
+              severity: error
+          - not_null:
+              severity: error
+      - name: spread_arg_pct
+        tests:
+          - not_null:
+              severity: warn
+              config:
+                where: "dolar_blue is not null and bcra_oficial is not null"

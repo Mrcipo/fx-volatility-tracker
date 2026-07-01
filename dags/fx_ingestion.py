@@ -99,6 +99,29 @@ with DAG(
         env=ENV,
     )
 
+    dbt_test_critical = BashOperator(
+        task_id="dbt_test_critical",
+        bash_command=(
+            f"cd {AIRFLOW_HOME}/dbt/fx_volatility && "
+            "dbt test --select staging marts.fx_daily_rates "
+            "marts.fx_spreads --profiles-dir "
+            f"{AIRFLOW_HOME}/dbt/profiles "
+            "--exclude assert_spread_within_bounds"
+        ),
+        env=ENV,
+    )
+
+    dbt_test_warnings = BashOperator(
+        task_id="dbt_test_warnings",
+        bash_command=(
+            f"cd {AIRFLOW_HOME}/dbt/fx_volatility && "
+            "dbt test --select assert_spread_within_bounds "
+            f"--profiles-dir {AIRFLOW_HOME}/dbt/profiles"
+        ),
+        env=ENV,
+        trigger_rule="all_done",
+    )
+
     # Dependencias
     extract_bcra >> [load_bcra_variables, load_bcra_tipo_cambio]
     extract_dolar >> load_dolarapi
@@ -106,3 +129,4 @@ with DAG(
     [load_bcra_variables, load_bcra_tipo_cambio,
      load_dolarapi, load_banxico] >> dbt_staging
     dbt_staging >> dbt_marts
+    dbt_marts >> dbt_test_critical >> dbt_test_warnings

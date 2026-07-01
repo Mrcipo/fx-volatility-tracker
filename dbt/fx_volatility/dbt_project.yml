@@ -37,3 +37,7 @@ models:
     marts:
       +materialized: table
       +schema: staging
+
+tests:
+  fx_volatility:
+    +severity: warn
