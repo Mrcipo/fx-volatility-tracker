@@ -1,5 +1,13 @@
 # FX Volatility Tracker
 
+[![CI](https://github.com/Mrcipo/fx-volatility-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/Mrcipo/fx-volatility-tracker/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)
+![dbt](https://img.shields.io/badge/dbt-1.8-FF694B?logo=dbt&logoColor=white)
+![Airflow](https://img.shields.io/badge/Airflow-2.9-017CEE?logo=apacheairflow&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 > Pipeline de datos end-to-end para tracking de tipos de cambio oficiales y paralelos de Argentina y México en tiempo cuasi-real, con cálculo de spreads y detección de anomalías estadísticas.
 
 ---
@@ -81,6 +89,7 @@
 | Almacenamiento | PostgreSQL | 15 |
 | Transformación | dbt Core + dbt-postgres | 1.8.8 / 1.8.2 |
 | Orquestación | Apache Airflow | 2.9.2 |
+| Visualización | Metabase | latest |
 | Infraestructura | Docker + Docker Compose | - |
 | Dependencias Python | pandas, psycopg2-binary, python-dotenv | 2.2.2 / 2.9.9 / 1.0.1 |
 
@@ -129,7 +138,7 @@ fx-volatility-tracker/
 │       ├── bcra_tipo_cambio/
 │       ├── dolarapi/
 │       └── banxico/
-├── docker-compose.yml          # Postgres 15 + Airflow (init, webserver, scheduler)
+├── docker-compose.yml          # Postgres 15 + Airflow (init, webserver, scheduler) + Metabase
 ├── .env.example                # Template de variables de entorno
 ├── .gitattributes              # Finales de línea LF para compatibilidad Linux/Windows
 └── requirements.txt
@@ -164,7 +173,8 @@ cd fx-volatility-tracker
 
 # 2. Crear entorno virtual e instalar dependencias
 python -m venv .venv
-.venv\Scripts\Activate.ps1          # Windows PowerShell
+source .venv/bin/activate           # Linux / macOS
+# .venv\Scripts\Activate.ps1        # Windows PowerShell
 pip install -r requirements.txt
 
 # 3. Configurar variables de entorno
@@ -176,9 +186,16 @@ docker compose up airflow-init       # Inicializar DB de Airflow (una vez)
 docker compose up -d                 # Levantar stack completo
 
 # 5. Aplicar DDL de PostgreSQL
-Get-Content sql/01_schemas.sql | docker exec -i fx-volatility-tracker-postgres-1 psql -U fxuser -d fxdb
-Get-Content sql/02_raw_tables.sql | docker exec -i fx-volatility-tracker-postgres-1 psql -U fxuser -d fxdb
-Get-Content sql/03_raw_constraints.sql | docker exec -i fx-volatility-tracker-postgres-1 psql -U fxuser -d fxdb
+
+# Linux / macOS
+for f in sql/01_schemas.sql sql/02_raw_tables.sql sql/03_raw_constraints.sql; do
+  docker compose exec -T postgres psql -U fxuser -d fxdb < "$f"
+done
+
+# Windows PowerShell
+# foreach ($f in "sql/01_schemas.sql","sql/02_raw_tables.sql","sql/03_raw_constraints.sql") {
+#   Get-Content $f | docker compose exec -T postgres psql -U fxuser -d fxdb
+# }
 ```
 
 ### Configuración de Airflow
