@@ -1,5 +1,7 @@
 # FX Volatility Tracker
 
+🌐 **English** · [Español](README.es.md)
+
 [![CI](https://github.com/Mrcipo/fx-volatility-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/Mrcipo/fx-volatility-tracker/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?logo=postgresql&logoColor=white)
@@ -8,38 +10,40 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-> Pipeline de datos end-to-end para tracking de tipos de cambio oficiales y paralelos de Argentina y México en tiempo cuasi-real, con cálculo de spreads y detección de anomalías estadísticas.
+> End-to-end data pipeline that tracks official and parallel exchange rates for Argentina and Mexico in near real time, with spread calculation and statistical anomaly detection.
 
 ---
 
-## Tabla de Contenidos
+## Table of Contents
 
-- [Arquitectura](#arquitectura)
-- [Stack Técnico](#stack-técnico)
-- [Estructura del Proyecto](#estructura-del-proyecto)
-- [Fuentes de Datos](#fuentes-de-datos)
-- [Inicio Rápido](#inicio-rápido)
-- [Pipeline de Datos](#pipeline-de-datos)
-- [Modelado de Datos](#modelado-de-datos)
-- [Orquestación](#orquestación)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Data Sources](#data-sources)
+- [Quick Start](#quick-start)
+- [Data Pipeline](#data-pipeline)
+- [Data Modeling](#data-modeling)
+- [Orchestration](#orchestration)
 - [Data Quality](#data-quality)
-- [Decisiones de Diseño](#decisiones-de-diseño)
+- [Dashboard](#dashboard)
+- [Design Decisions](#design-decisions)
+- [License](#license)
 
 ---
 
-## Arquitectura
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        EXTRACCIÓN                               │
+│                          EXTRACTION                             │
 │  BCRA API v4.0   │   DolarAPI v1   │   Banxico SIE REST         │
-│  (oficial ARS)   │  (paralelos ARG)│   (FIX + interbancario MX) │
+│  (official ARS)  │ (parallel ARG)  │   (FIX + interbank MX)     │
 └────────┬─────────┴────────┬────────┴──────────┬─────────────────┘
          │                  │                   │
          ▼                  ▼                   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     LANDING ZONE (disco)                        │
-│              data/raw/{fuente}/*.json  (inmutable)              │
+│                     LANDING ZONE (disk)                         │
+│              data/raw/{source}/*.json  (immutable)              │
 └────────────────────────────┬────────────────────────────────────┘
                              │
                              ▼
@@ -47,145 +51,145 @@
 │                  RAW LAYER (PostgreSQL)                         │
 │   raw.bcra_tipo_cambio  │  raw.dolarapi_cotizaciones            │
 │   raw.bcra_variables    │  raw.banxico_series                   │
-│   JSONB crudo + auditoría │ ON CONFLICT DO NOTHING              │
+│   raw JSONB + audit     │  ON CONFLICT DO NOTHING               │
 └────────────────────────────┬────────────────────────────────────┘
                              │  dbt
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                 STAGING LAYER (dbt views)                       │
 │   stg_bcra_tipo_cambio  │  stg_dolarapi_cotizaciones            │
-│   stg_banxico_series    │  Timestamps → UTC │ JSONB desempaquetado│
+│   stg_banxico_series    │  Timestamps → UTC │ JSONB unpacked    │
 └────────────────────────────┬────────────────────────────────────┘
                              │  dbt
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                   MARTS LAYER (dbt tables)                      │
-│   fx_daily_rates  →  Forward fill gaps-and-islands (max 3 días) │
-│   fx_spreads      →  Spread % blue vs oficial │ FIX vs interbanc│
+│   fx_daily_rates  →  Gaps-and-islands forward fill (max 3 days) │
+│   fx_spreads      →  Spread % blue vs official │ FIX vs interbk │
 └────────────────────────────┬────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              DATA QUALITY (dbt tests - 22 tests)                │
-│   Críticos (error): uniqueness, not_null, accepted_values       │
-│   Warnings:  anomalías estadísticas spread (media ± 2σ)         │
+│   Critical (error): uniqueness, not_null, accepted_values       │
+│   Warnings:  statistical spread anomalies (mean ± 2σ)           │
 └─────────────────────────────────────────────────────────────────┘
                              ▲
                              │
 ┌─────────────────────────────────────────────────────────────────┐
-│              ORQUESTACIÓN (Apache Airflow)                      │
-│   DAG fx_ingestion │ schedule: 0 */2 * * * │ 11 tareas          │
-│   Retry exponencial │ trigger_rule separado por severidad        │
+│              ORCHESTRATION (Apache Airflow)                     │
+│   DAG fx_ingestion │ schedule: 0 */2 * * * │ 11 tasks           │
+│   Exponential retry │ trigger_rule split by severity            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Stack Técnico
+## Tech Stack
 
-| Capa | Tecnología | Versión |
+| Layer | Technology | Version |
 |---|---|---|
-| Extracción | Python + requests | 3.12 / 2.32.3 |
-| Almacenamiento | PostgreSQL | 15 |
-| Transformación | dbt Core + dbt-postgres | 1.8.8 / 1.8.2 |
-| Orquestación | Apache Airflow | 2.9.2 |
-| Visualización | Metabase | latest |
-| Infraestructura | Docker + Docker Compose | - |
-| Dependencias Python | pandas, psycopg2-binary, python-dotenv | 2.2.2 / 2.9.9 / 1.0.1 |
+| Extraction | Python + requests | 3.12 / 2.32.3 |
+| Storage | PostgreSQL | 15 |
+| Transformation | dbt Core + dbt-postgres | 1.8.8 / 1.8.2 |
+| Orchestration | Apache Airflow | 2.9.2 |
+| Visualization | Metabase | latest |
+| Infrastructure | Docker + Docker Compose | - |
+| Python dependencies | pandas, psycopg2-binary, python-dotenv | 2.2.2 / 2.9.9 / 1.0.1 |
 
 ---
 
-## Estructura del Proyecto
+## Project Structure
 
 ```
 fx-volatility-tracker/
 ├── extractors/
-│   ├── base_client.py          # HTTPAdapter con retry exponencial (5 intentos, backoff x2)
-│   ├── bcra.py                 # BCRA API v4.0 - tipo de cambio oficial ARS/USD
-│   ├── dolarapi.py             # DolarAPI - 7 tipos de cambio paralelos Argentina
-│   └── banxico.py              # Banxico SIE - series SF60653 (FIX) y SF46410
+│   ├── base_client.py          # HTTPAdapter with exponential retry (5 attempts, backoff x2)
+│   ├── bcra.py                 # BCRA API v4.0 - official ARS/USD exchange rate
+│   ├── dolarapi.py             # DolarAPI - 7 parallel exchange rates for Argentina
+│   └── banxico.py              # Banxico SIE - series SF60653 (FIX) and SF46410
 ├── loaders/
-│   ├── db.py                   # Conexión psycopg2 con validación de env vars
-│   └── load_raw.py             # Loader idempotente: ON CONFLICT (source_file) DO NOTHING
+│   ├── db.py                   # psycopg2 connection with env var validation
+│   └── load_raw.py             # Idempotent loader: ON CONFLICT (source_file) DO NOTHING
 ├── sql/
-│   ├── 01_schemas.sql          # Schemas raw y staging
-│   ├── 02_raw_tables.sql       # 4 tablas con JSONB + índices GIN y B-tree
-│   └── 03_raw_constraints.sql  # UNIQUE constraints para idempotencia
+│   ├── 01_schemas.sql          # raw and staging schemas
+│   ├── 02_raw_tables.sql       # 4 JSONB tables + GIN and B-tree indexes
+│   └── 03_raw_constraints.sql  # UNIQUE constraints for idempotency
 ├── dbt/
 │   ├── profiles/
-│   │   └── profiles.yml        # Perfil Docker interno (host: postgres, port: 5432)
+│   │   └── profiles.yml        # Internal Docker profile (host: postgres, port: 5432)
 │   └── fx_volatility/
 │       ├── models/
 │       │   ├── staging/
 │       │   │   ├── sources.yml
-│       │   │   ├── schema.yml              # 16 tests críticos
+│       │   │   ├── schema.yml              # 16 critical tests
 │       │   │   ├── stg_bcra_tipo_cambio.sql
 │       │   │   ├── stg_dolarapi_cotizaciones.sql
 │       │   │   └── stg_banxico_series.sql
 │       │   └── marts/
-│       │       ├── schema.yml              # Tests de unicidad y not_null
-│       │       ├── fx_daily_rates.sql      # Forward fill gaps-and-islands
-│       │       └── fx_spreads.sql          # Cálculo de spreads diarios
+│       │       ├── schema.yml              # Uniqueness and not_null tests
+│       │       ├── fx_daily_rates.sql      # Gaps-and-islands forward fill
+│       │       └── fx_spreads.sql          # Daily spread calculation
 │       ├── tests/
-│       │   └── assert_spread_within_bounds.sql  # Detección anomalías (warn)
+│       │   └── assert_spread_within_bounds.sql  # Anomaly detection (warn)
 │       └── macros/
-│           └── generate_schema_name.sql    # Override: evita staging_staging
+│           └── generate_schema_name.sql    # Override: avoids staging_staging
 ├── dags/
-│   └── fx_ingestion.py         # DAG completo con 11 tareas y retry exponencial
+│   └── fx_ingestion.py         # Full DAG with 11 tasks and exponential retry
 ├── data/
-│   └── raw/                    # Landing zone (excluida de git via .gitignore)
+│   └── raw/                    # Landing zone (excluded from git via .gitignore)
 │       ├── bcra_variables/
 │       ├── bcra_tipo_cambio/
 │       ├── dolarapi/
 │       └── banxico/
 ├── docker-compose.yml          # Postgres 15 + Airflow (init, webserver, scheduler) + Metabase
-├── .env.example                # Template de variables de entorno
-├── .gitattributes              # Finales de línea LF para compatibilidad Linux/Windows
+├── .env.example                # Environment variables template
+├── .gitattributes              # LF line endings for Linux/Windows compatibility
 └── requirements.txt
 ```
 
 ---
 
-## Fuentes de Datos
+## Data Sources
 
-| API | País | Dato | Auth | Frecuencia publicación |
+| API | Country | Data | Auth | Publication frequency |
 |---|---|---|---|---|
-| [BCRA v4.0](https://api.bcra.gob.ar) | 🇦🇷 Argentina | Tipo de cambio minorista ARS/USD (idVariable=4) | Sin token | Días hábiles |
-| [DolarAPI](https://dolarapi.com) | 🇦🇷 Argentina | 7 tipos: oficial, blue, bolsa, CCL, mayorista, cripto, tarjeta | Sin token | Intradía |
-| [Banxico SIE](https://www.banxico.org.mx/SieAPIRest) | 🇲🇽 México | SF60653 (FIX MXN/USD) + SF46410 (interbancario 48h) | Token requerido | Días hábiles |
+| [BCRA v4.0](https://api.bcra.gob.ar) | 🇦🇷 Argentina | Retail ARS/USD exchange rate (idVariable=4) | No token | Business days |
+| [DolarAPI](https://dolarapi.com) | 🇦🇷 Argentina | 7 types: official, blue, bolsa, CCL, wholesale, crypto, card | No token | Intraday |
+| [Banxico SIE](https://www.banxico.org.mx/SieAPIRest) | 🇲🇽 Mexico | SF60653 (FIX MXN/USD) + SF46410 (48h interbank) | Token required | Business days |
 
 ---
 
-## Inicio Rápido
+## Quick Start
 
-### Prerrequisitos
+### Prerequisites
 
 - Docker Desktop
 - Python 3.12+
-- Token gratuito de [Banxico SIE](https://www.banxico.org.mx/SieAPIRest/service/v1/)
+- Free [Banxico SIE](https://www.banxico.org.mx/SieAPIRest/service/v1/) token
 
-### Instalación
+### Installation
 
 ```bash
-# 1. Clonar el repositorio
+# 1. Clone the repository
 git clone https://github.com/Mrcipo/fx-volatility-tracker.git
 cd fx-volatility-tracker
 
-# 2. Crear entorno virtual e instalar dependencias
+# 2. Create a virtual environment and install dependencies
 python -m venv .venv
 source .venv/bin/activate           # Linux / macOS
 # .venv\Scripts\Activate.ps1        # Windows PowerShell
 pip install -r requirements.txt
 
-# 3. Configurar variables de entorno
+# 3. Configure environment variables
 cp .env.example .env
-# Editar .env con tu BMX_TOKEN y la Fernet Key de Airflow
+# Edit .env with your BMX_TOKEN and the Airflow Fernet key
 
-# 4. Levantar infraestructura
-docker compose up airflow-init       # Inicializar DB de Airflow (una vez)
-docker compose up -d                 # Levantar stack completo
+# 4. Start the infrastructure
+docker compose up airflow-init       # Initialize the Airflow DB (once)
+docker compose up -d                 # Start the full stack
 
-# 5. Aplicar DDL de PostgreSQL
+# 5. Apply the PostgreSQL DDL
 
 # Linux / macOS
 for f in sql/01_schemas.sql sql/02_raw_tables.sql sql/03_raw_constraints.sql; do
@@ -198,113 +202,113 @@ done
 # }
 ```
 
-### Configuración de Airflow
+### Airflow setup
 
-1. Acceder a `http://localhost:8080` (usuario: `admin`, password: `admin`)
-2. Ir a **Admin → Variables** y crear la variable `BMX_TOKEN` con tu token de Banxico
-3. Activar el DAG `fx_ingestion`
+1. Open `http://localhost:8080` (user: `admin`, password: `admin`)
+2. Go to **Admin → Variables** and create the `BMX_TOKEN` variable with your Banxico token
+3. Enable the `fx_ingestion` DAG
 
-### Variables de entorno requeridas
+### Required environment variables
 
 ```env
-BMX_TOKEN=tu_token_banxico
+BMX_TOKEN=your_banxico_token
 POSTGRES_USER=fxuser
 POSTGRES_PASSWORD=fxpass
 POSTGRES_DB=fxdb
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5439
-AIRFLOW__CORE__FERNET_KEY=tu_fernet_key
+AIRFLOW__CORE__FERNET_KEY=your_fernet_key
 AIRFLOW__CORE__EXECUTOR=LocalExecutor
 AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://fxuser:fxpass@postgres:5432/fxdb?options=-csearch_path=airflow
 AIRFLOW__CORE__LOAD_EXAMPLES=False
 ```
 
-Generar Fernet Key:
+Generate a Fernet key:
 ```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
 ---
 
-## Pipeline de Datos
+## Data Pipeline
 
-### Extracción con Retry Exponencial
+### Extraction with Exponential Retry
 
-Todos los extractores heredan de `BaseAPIClient`, que implementa retry automático con backoff exponencial:
+All extractors inherit from `BaseAPIClient`, which implements automatic retry with exponential backoff:
 
 ```
-Intento 1 → fallo → espera 1s
-Intento 2 → fallo → espera 2s
-Intento 3 → fallo → espera 4s
-Intento 4 → fallo → espera 8s
-Intento 5 → fallo → APIClientError
+Attempt 1 → failure → wait 1s
+Attempt 2 → failure → wait 2s
+Attempt 3 → failure → wait 4s
+Attempt 4 → failure → wait 8s
+Attempt 5 → failure → APIClientError
 ```
 
-Códigos HTTP que disparan retry: `429, 500, 502, 503, 504`
+HTTP status codes that trigger a retry: `429, 500, 502, 503, 504`
 
-### Idempotencia del Loader
+### Loader Idempotency
 
-El loader usa `INSERT ... ON CONFLICT (source_file) DO NOTHING`. El `source_file` (nombre del archivo JSON con timestamp) actúa como clave natural: el mismo archivo nunca puede insertarse dos veces en la misma tabla. Si Airflow reintenta una tarea fallida, los datos ya cargados se ignoran silenciosamente.
+The loader uses `INSERT ... ON CONFLICT (source_file) DO NOTHING`. The `source_file` (the timestamped JSON filename) acts as a natural key: the same file can never be inserted twice into the same table. If Airflow retries a failed task, data that was already loaded is silently ignored.
 
-### Forward Fill con Límite de 3 Días
+### Forward Fill with a 3-Day Limit
 
-El tipo de cambio no se publica los fines de semana ni feriados. Para mantener una serie continua sin distorsionar los datos, implementamos el patrón **gaps-and-islands**:
+Exchange rates are not published on weekends or holidays. To keep a continuous series without distorting the data, the **gaps-and-islands** pattern is used:
 
 ```sql
--- Número de grupo se incrementa solo cuando aparece un valor real
+-- The group number only increments when a real value appears
 sum(case when valor is not null then 1 else 0 end)
     over (order by fecha) as grp
 
--- FIRST_VALUE dentro del grupo propaga el último valor conocido
+-- FIRST_VALUE within the group propagates the last known value
 first_value(valor) over (partition by grp order by fecha) as valor_filled
 
--- ROW_NUMBER - 1 dentro del grupo = días consecutivos sin dato
+-- ROW_NUMBER - 1 within the group = consecutive days without data
 row_number() over (partition by grp order by fecha) - 1 as gap
 ```
 
-Si `gap > 3`, el valor se marca como `NULL` intencional — no se propaga más allá del límite. Cada columna incluye un flag `*_is_filled` para trazabilidad.
+If `gap > 3`, the value is intentionally set to `NULL` — it is not propagated beyond the limit. Every column includes an `*_is_filled` flag for traceability.
 
-### Normalización de Timezones a UTC
+### Timezone Normalization to UTC
 
-| Fuente | Formato original | Conversión |
+| Source | Original format | Conversion |
 |---|---|---|
-| BCRA | `"2026-06-29"` (date sin tz) | `date + interval '18h'` AT TIME ZONE `America/Argentina/Buenos_Aires` |
-| DolarAPI | `"2026-06-29T18:00:00.000Z"` (UTC explícito) | Sin conversión necesaria |
-| Banxico | `"29/06/2026"` (DD/MM/YYYY sin tz) | `to_date(..., 'DD/MM/YYYY')::timestamp` AT TIME ZONE `America/Mexico_City` |
+| BCRA | `"2026-06-29"` (date, no tz) | `date + interval '18h'` AT TIME ZONE `America/Argentina/Buenos_Aires` |
+| DolarAPI | `"2026-06-29T18:00:00.000Z"` (explicit UTC) | No conversion needed |
+| Banxico | `"29/06/2026"` (DD/MM/YYYY, no tz) | `to_date(..., 'DD/MM/YYYY')::timestamp` AT TIME ZONE `America/Mexico_City` |
 
 ---
 
-## Modelado de Datos
+## Data Modeling
 
-### Raw Layer — Principio de Inmutabilidad
+### Raw Layer — Immutability Principle
 
 ```sql
 CREATE TABLE raw.bcra_tipo_cambio (
     id           BIGSERIAL    PRIMARY KEY,
-    source_file  TEXT         NOT NULL UNIQUE,  -- garantía de idempotencia
+    source_file  TEXT         NOT NULL UNIQUE,  -- idempotency guarantee
     ingested_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    raw_payload  JSONB        NOT NULL           -- JSON crudo sin transformar
+    raw_payload  JSONB        NOT NULL           -- untransformed raw JSON
 );
--- Índice GIN para queries JSONB eficientes
--- Índice B-tree sobre ingested_at para queries temporales
+-- GIN index for efficient JSONB queries
+-- B-tree index on ingested_at for time-based queries
 ```
 
-La raw layer nunca se actualiza ni se borra. Es la fuente de verdad para replay de cualquier transformación.
+The raw layer is never updated or deleted. It is the source of truth for replaying any transformation.
 
-### Marts — Resultado Final
+### Marts — Final Output
 
-**`fx_daily_rates`** — una fila por día con tipos de cambio de todas las fuentes, forward fill aplicado y flags de trazabilidad.
+**`fx_daily_rates`** — one row per day with the exchange rates from every source, forward fill applied and traceability flags.
 
-**`fx_spreads`** — spread porcentual calculado como:
+**`fx_spreads`** — percentage spread calculated as:
 ```
 spread_arg_pct = (dolar_blue - bcra_oficial) / bcra_oficial * 100
 ```
 
 ---
 
-## Orquestación
+## Orchestration
 
-El DAG `fx_ingestion` corre cada 2 horas (`0 */2 * * *`) con las siguientes características:
+The `fx_ingestion` DAG runs every 2 hours (`0 */2 * * *`) with the following characteristics:
 
 ```
 extract_bcra ──→ load_bcra_variables ──┐
@@ -313,61 +317,63 @@ extract_dolar──→ load_dolarapi ─────────┼──→ dbt
 extract_banxico─→ load_banxico ─────────┘
 ```
 
-| Parámetro | Valor |
+| Parameter | Value |
 |---|---|
-| Reintentos | 3 con backoff exponencial |
-| Delay inicial | 5 minutos |
-| Delay máximo | 30 minutos |
-| `dbt_staging` trigger rule | `all_done` — corre aunque alguna extracción falle |
-| `dbt_test_warnings` trigger rule | `all_done` — reporta anomalías sin bloquear |
+| Retries | 3 with exponential backoff |
+| Initial delay | 5 minutes |
+| Maximum delay | 30 minutes |
+| `dbt_staging` trigger rule | `all_done` — runs even if an extraction fails |
+| `dbt_test_warnings` trigger rule | `all_done` — reports anomalies without blocking |
 
 ---
 
 ## Data Quality
 
-22 tests dbt organizados en dos niveles de severidad:
+22 dbt tests organized in two severity levels:
 
-### Tests Críticos (`severity: error`) — bloquean el pipeline
+### Critical Tests (`severity: error`) — block the pipeline
 
-- `not_null` en todas las columnas clave de staging y marts
-- `unique` en columnas de fecha de `fx_daily_rates` y `fx_spreads`
-- `accepted_values` para `casa` en DolarAPI (`oficial`, `blue`, `bolsa`, `contadoconliqui`, `mayorista`, `cripto`, `tarjeta`)
-- `accepted_values` para `id_serie` en Banxico (`SF60653`, `SF46410`)
-- `accepted_values` para `fuente` en BCRA (`bcra_oficial_minorista`)
+- `not_null` on all key columns in staging and marts
+- `unique` on the date columns of `fx_daily_rates` and `fx_spreads`
+- `accepted_values` for `casa` in DolarAPI (`oficial`, `blue`, `bolsa`, `contadoconliqui`, `mayorista`, `cripto`, `tarjeta`)
+- `accepted_values` for `id_serie` in Banxico (`SF60653`, `SF46410`)
+- `accepted_values` for `fuente` in BCRA (`bcra_oficial_minorista`)
 
-### Tests de Anomalías (`severity: warn`) — alertan sin bloquear
+### Anomaly Tests (`severity: warn`) — alert without blocking
 
-- **`assert_spread_within_bounds`**: detecta spreads fuera del rango `media ± 2σ` histórico. Cuando el spread diario supera este umbral, Airflow registra el warning en los logs pero el pipeline continúa ejecutándose.
+- **`assert_spread_within_bounds`**: detects spreads outside the historical `mean ± 2σ` range. When the daily spread exceeds this threshold, Airflow logs the warning but the pipeline keeps running.
 
 ---
 
 ## Dashboard
 
-El pipeline expone los datos finales a través de un dashboard en **Metabase** 
-(`http://localhost:3000`) con cuatro visualizaciones:
+The pipeline serves the final data through a **Metabase** dashboard (`http://localhost:3000`) with four visualizations:
 
-- **ARS/USD Oficial vs Blue** — evolución histórica del tipo de cambio oficial 
-  y paralelo (blue) de Argentina en la misma línea de tiempo
-- **Spread ARG % Blue vs Oficial** — spread porcentual diario calculado por dbt
-- **MXN/USD Tipo de Cambio FIX Banxico** — serie histórica del tipo de cambio 
-  oficial mexicano (serie SF60653)
-- **Tabla resumen con flags de calidad** — vista diaria con indicadores 
-  ✓ Dato real / ⚠ Forward fill por cada fuente
+- **ARS/USD Official vs Blue** — historical evolution of Argentina's official and parallel (blue) exchange rates on the same timeline
+- **ARG Spread % Blue vs Official** — daily percentage spread calculated by dbt
+- **MXN/USD FIX Banxico Exchange Rate** — historical series of the official Mexican exchange rate (series SF60653)
+- **Summary table with quality flags** — daily view with ✓ Real data / ⚠ Forward fill indicators for each source
 
 ![FX Volatility Tracker Dashboard](docs/dashboard.png)
 
 ---
 
-## Decisiones de Diseño
+## Design Decisions
 
-**¿Por qué JSONB crudo en raw layer?**
-La raw layer guarda el payload completo de cada API sin desempaquetar. Esto permite reprocesar cualquier transformación si se encuentra un bug, sin necesidad de re-llamar a las APIs. Si la API cambia su estructura (como pasó entre BCRA v3.0 y v4.0), el loader sigue funcionando — solo cambia el modelo dbt.
+**Why raw JSONB in the raw layer?**
+The raw layer stores each API's full payload without unpacking it. This makes it possible to reprocess any transformation if a bug is found, without calling the APIs again. If an API changes its structure (as happened between BCRA v3.0 and v4.0), the loader keeps working — only the dbt model changes.
 
-**¿Por qué `gaps-and-islands` en vez de `LAST_VALUE IGNORE NULLS`?**
-PostgreSQL no soporta `IGNORE NULLS` en funciones de ventana. El sustituto común (`MAX()` sobre ventana) distorsiona los datos eligiendo el máximo de la ventana en vez del último valor conocido — un error silencioso que puede inflar artificialmente el spread calculado. El patrón gaps-and-islands resuelve esto correctamente usando `FIRST_VALUE` particionado por grupo.
+**Why `gaps-and-islands` instead of `LAST_VALUE IGNORE NULLS`?**
+PostgreSQL does not support `IGNORE NULLS` in window functions. The common substitute (`MAX()` over a window) distorts the data by picking the maximum of the window instead of the last known value — a silent error that can artificially inflate the calculated spread. The gaps-and-islands pattern solves this correctly using `FIRST_VALUE` partitioned by group.
 
-**¿Por qué un `profiles.yml` separado para Docker?**
-Dentro de los contenedores de Airflow, PostgreSQL se llama `postgres` (nombre del servicio Docker) en el puerto `5432` interno. Desde Windows se accede por `localhost:5439`. Mantener dos perfiles evita errores de conectividad y hace el proyecto portable a cualquier entorno.
+**Why a separate `profiles.yml` for Docker?**
+Inside the Airflow containers, PostgreSQL is called `postgres` (the Docker service name) on internal port `5432`. From Windows it is reached at `localhost:5439`. Keeping two profiles avoids connectivity errors and makes the project portable to any environment.
 
-**¿Por qué `ON CONFLICT DO NOTHING` en vez de UPSERT completo?**
-La raw layer es append-only por diseño. Si un archivo ya fue cargado, ignorarlo es la respuesta correcta — no actualizarlo. Actualizar datos crudos ya ingestados violaría el principio de inmutabilidad de la landing zone.
+**Why `ON CONFLICT DO NOTHING` instead of a full UPSERT?**
+The raw layer is append-only by design. If a file has already been loaded, ignoring it is the right answer — not updating it. Updating raw data that was already ingested would violate the immutability principle of the landing zone.
+
+---
+
+## License
+
+[MIT](LICENSE)
