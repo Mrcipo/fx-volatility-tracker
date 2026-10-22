@@ -136,6 +136,7 @@ fx-volatility-tracker/
 │           └── generate_schema_name.sql    # Override: avoids staging_staging
 ├── dags/
 │   └── fx_ingestion.py         # Full DAG with 11 tasks and exponential retry
+├── tests/                      # pytest: extractors (mocked HTTP) and loader (PostgreSQL)
 ├── data/
 │   └── raw/                    # Landing zone (excluded from git via .gitignore)
 │       ├── bcra_variables/
@@ -342,6 +343,22 @@ extract_banxico─→ load_banxico ─────────┘
 ### Anomaly Tests (`severity: warn`) — alert without blocking
 
 - **`assert_spread_within_bounds`**: detects spreads outside the historical `mean ± 2σ` range. When the daily spread exceeds this threshold, Airflow logs the warning but the pipeline keeps running.
+
+### Python unit tests
+
+17 pytest tests cover the ingestion code, and CI runs them on every push:
+
+- **Extractors** (HTTP mocked): URL and date-range construction for BCRA, DolarAPI and Banxico, the
+  Banxico token header, retry configuration, conversion of HTTP and network errors into
+  `APIClientError`, timestamped raw files saved in each source's folder.
+- **Loader** (against a PostgreSQL service built from `sql/`): payloads stored as JSONB, idempotent
+  re-loads (`ON CONFLICT DO NOTHING`), rollback on invalid JSON, directory loading and missing
+  environment variables.
+
+```bash
+pip install -r requirements-dev.txt
+pytest        # needs a PostgreSQL database named fx_test (see tests/conftest.py)
+```
 
 ---
 

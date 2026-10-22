@@ -6,3 +6,8 @@ data/raw/**/*.json
 *.egg-info/
 
 dbt/profiles/.user.yml
+
+# Local artefacts
+dbt/logs/
+dbt/fx_volatility/logs/
+.pytest_cache/
